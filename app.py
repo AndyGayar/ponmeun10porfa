@@ -106,5 +106,22 @@ def crear_alumno():
                     
             return render_template('nuevo_alumno.html', error=error_msg)
 
+@app.route('/alumno/<int:student_id>/notas')
+def student_grades(student_id):
+    # Get student information
+    student = db.query_one("SELECT * FROM students WHERE student_id = %s", (student_id,))
+    if not student:
+        return "Alumno no encontrado", 404
+    
+    # Get all subjects and the student's grades
+    subjects_with_grades = db.query("""
+        SELECT s.subject_id, s.name, s.hours_per_week, ps.calification
+        FROM subject s
+        LEFT JOIN person_subject ps ON s.subject_id = ps.subject_id AND ps.person_id = %s
+        ORDER BY s.name
+    """, (student_id,))
+    
+    return render_template('student_grades.html', student=student, subjects=subjects_with_grades)
+
 if __name__ == '__main__':
     app.run(debug=True, port=80)
