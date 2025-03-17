@@ -64,12 +64,47 @@ def update_grade(student_id):
 
 @app.route('/alumnos')
 def alumnos():
-    return render_template('alumnos.html')
+    # Fetch all students from the database
+    students = db.query("SELECT * FROM students ORDER BY name")
+    return render_template('alumnos.html', students=students)
 
 @app.route('/nuevo_alumno')
 def nuevo_alumno():
     return render_template('nuevo_alumno.html')
 
+@app.route('/crear_alumno', methods=['POST'])
+def crear_alumno():
+    if request.method == 'POST':
+        # Get form data
+        name = request.form.get('name')
+        dni = request.form.get('dni')
+        phone = request.form.get('phone')
+        email = request.form.get('email')
+        address = request.form.get('address')
+        
+        # Validate required fields
+        if not name or not dni or not email:
+            return render_template('nuevo_alumno.html', error="Todos los campos marcados con * son obligatorios")
+        
+        try:
+            # Insert new student
+            db.execute(
+                "INSERT INTO students (name, dni, phone, email, address) VALUES (%s, %s, %s, %s, %s)",
+                (name, dni, phone, email, address)
+            )
+            
+            # Redirect to students list
+            return redirect(url_for('alumnos'))
+        except Exception as e:
+            # Handle errors (e.g., duplicate DNI or email)
+            error_msg = str(e)
+            if "Duplicate entry" in error_msg:
+                if "dni" in error_msg:
+                    error_msg = "Error: El DNI/NIE ya existe en el sistema"
+                elif "email" in error_msg:
+                    error_msg = "Error: El email ya existe en el sistema"
+                    
+            return render_template('nuevo_alumno.html', error=error_msg)
 
 if __name__ == '__main__':
     app.run(debug=True, port=80)
