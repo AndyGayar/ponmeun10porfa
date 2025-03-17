@@ -1,0 +1,75 @@
+from flask import Flask,render_template,request,redirect,url_for,session
+import db
+from config import Config  # Import Config class
+import json
+from datetime import timedelta
+
+app = Flask(__name__)
+app.secret_key = Config.SECRET_KEY  # Set the secret key from Config
+
+@app.route('/')
+def home():
+    # Get all subjects for the dropdown menu
+    subjects = db.query("SELECT * FROM subject ORDER BY name")
+    return render_template('home.html', subjects=subjects)
+
+@app.route('/asignatura')
+def asignatura_redirect():
+    # Redirect to the home page if no subject ID is provided
+    return redirect(url_for('home'))
+
+@app.route('/asignatura/<int:subject_id>')
+def asignatura(subject_id):
+    # Get subject information
+    subject = db.query_one("SELECT * FROM subject WHERE subject_id = %s", (subject_id,))
+    if not subject:
+        return "Asignatura no encontrada", 404
+    
+    # Get students enrolled in this subject with their grades
+    enrolled_students = db.query("""
+        SELECT s.student_id, s.name as student_name, ps.calification
+        FROM students s
+        LEFT JOIN person_subject ps ON s.student_id = ps.person_id AND ps.subject_id = %s
+        ORDER BY s.name
+    """, (subject_id,))
+    
+    return render_template('asignatura.html', subject=subject, students=enrolled_students)
+
+@app.route('/update_grade/<int:student_id>', methods=['POST'])
+def update_grade(student_id):
+    if request.method == 'POST':
+        subject_id = request.form.get('subject_id')
+        calification = request.form.get('calification')
+        
+        # Check if the grade already exists for this student and subject
+        existing_grade = db.query_one(
+            "SELECT * FROM person_subject WHERE person_id = %s AND subject_id = %s",
+            (student_id, subject_id)
+        )
+        
+        if existing_grade:
+            # Update existing grade
+            db.execute(
+                "UPDATE person_subject SET calification = %s WHERE person_id = %s AND subject_id = %s",
+                (calification, student_id, subject_id)
+            )
+        else:
+            # Insert new grade
+            db.execute(
+                "INSERT INTO person_subject (person_id, subject_id, calification) VALUES (%s, %s, %s)",
+                (student_id, subject_id, calification)
+            )
+        
+        return redirect(url_for('asignatura', subject_id=subject_id))
+
+@app.route('/alumnos')
+def alumnos():
+    return render_template('alumnos.html')
+
+@app.route('/nuevo_alumno')
+def nuevo_alumno():
+    return render_template('nuevo_alumno.html')
+
+
+if __name__ == '__main__':
+    app.run(debug=True, port=80)
